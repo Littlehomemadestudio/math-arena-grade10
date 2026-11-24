@@ -1,0 +1,35 @@
+name: Screenshot Evidence Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  require-screenshots-for-app-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check changed paths for app-facing work and screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' > /tmp/pr-files.txt
+          echo "Changed files:"
+          cat /tmp/pr-files.txt
+          if grep -Eq '^(app/|android/)' /tmp/pr-files.txt; then
+            if grep -Eq '^screenshots/.*\.(png|jpg|jpeg|webp)$' /tmp/pr-files.txt; then
+              echo "PASS: app-facing changes include screenshot evidence."
+            else
+              echo "FAIL: app-facing changes require fresh screenshot files under screenshots/."
+              exit 1
+            fi
+          else
+            echo "PASS: no app/android paths changed; screenshot evidence is not required by this gate."
+          fi
